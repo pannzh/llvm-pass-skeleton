@@ -1,4 +1,3 @@
-#include "CommonMemorySafetyPasses.h"
 #include "llvm/Pass.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/IR/Constants.h"
@@ -71,14 +70,12 @@ bool InstrumentMemoryAccesses::doInitialization(Module &M) {
     std::vector<Type*> params;
     params.push_back(VoidPtrTy);
     params.push_back(SizeTy);
+    params.push_back(VoidPtrTy);
     params.push_back(SizeTy);
     FunctionType *LoadStoreFuncType = FunctionType::get(VoidTy,params,false);
     M.getOrInsertFunction("__loadcheck", LoadStoreFuncType);
     M.getOrInsertFunction("__storecheck", LoadStoreFuncType);
     errs() << "doInitialization done \n";
-    // Create function prototypes
-    //M.getOrInsertFunction("__loadcheck", VoidTy, VoidPtrTy, SizeTy, NULL);
-    //M.getOrInsertFunction("__storecheck", VoidTy, VoidPtrTy, SizeTy, NULL);
     return true;
 }
 
@@ -127,12 +124,14 @@ void InstrumentMemoryAccesses::instrument(Value *Pointer, Value *AccessSize,
     //       << "/" << IntrinsicsInstrumented
     //       << " (" << Check->getName() << ")\n";
 
+    Value *RtFile = Builder->CreateGlobalStringPtr("N/A", ".str");
     Value *RtLine = ConstantInt::get(SizeTy, 0);
     // Copy debug information if it is present.
     if (MDNode *MD = I.getMetadata("dbg")) {
         DebugLoc Loc(MD);
         auto *Scope = cast<DIScope>(Loc.getScope());
         unsigned Line = Loc.getLine();
+        RtFile = Builder->CreateGlobalStringPtr(Scope->getFilename().str().c_str(), ".str");
         RtLine = ConstantInt::get(SizeTy, Line);
         errs() << Scope->getFilename() << " : " << Line << "\n";
     } else {
@@ -140,7 +139,7 @@ void InstrumentMemoryAccesses::instrument(Value *Pointer, Value *AccessSize,
     }
 
     // Create ArrayRef to be passed to Builder->CreateCall.
-    Value* args[] = {VoidPointer,AccessSize,RtLine};
+    Value* args[] = {VoidPointer, AccessSize, RtFile, RtLine};
     CallInst *CI = Builder->CreateCall(Check, args);
     if (MDNode *MD = I.getMetadata("dbg")) {
         CI->setMetadata("dbg", MD);
@@ -194,6 +193,10 @@ void InstrumentMemoryAccesses::visitMemIntrinsic(MemIntrinsic &MI) {
 }
 
 char InstrumentMemoryAccesses::ID = 0;
+namespace llvm {
+    FunctionPass *createInstrumentMemoryAccessesPass();
+    void initializeInstrumentMemoryAccessesPass(llvm::PassRegistry&);
+}
 INITIALIZE_PASS(InstrumentMemoryAccesses, "instrument-memory-accesses",
         "Instrument memory accesses", false, false)
 //static RegisterPass<InstrumentMemoryAccesses> X("sanitizer", "Memory Sanitizer Pass by Pan");
