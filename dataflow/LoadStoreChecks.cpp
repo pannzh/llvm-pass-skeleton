@@ -115,7 +115,7 @@ bool InstrumentMemoryAccesses::runOnFunction(Function &F) {
 //
 void InstrumentMemoryAccesses::instrument(Value *Pointer, Value *AccessSize,
         Function *Check, Instruction &I) {
-    Builder->SetInsertPoint(&I);
+    Builder->SetInsertPoint(I.getNextNode());
     Value *VoidPointer = Builder->CreatePointerCast(Pointer, VoidPtrTy);
     errs() << "instrument instruction " << I << "\n";
     //errs() << "Pointer: " << *Pointer << "\n";
@@ -136,7 +136,7 @@ void InstrumentMemoryAccesses::instrument(Value *Pointer, Value *AccessSize,
         RtLine = ConstantInt::get(SizeTy, Line);
         errs() << Scope->getFilename() << " : " << Line << "\n";
     } else {
-        errs() << "No debug info, you won't get valid file:line message\n";
+        errs() << "No debug info, you won't get valid file:line messages\n";
     }
 
     // Create ArrayRef to be passed to Builder->CreateCall.
